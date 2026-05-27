@@ -37,6 +37,24 @@ function useSafeReducedMotion() {
   return prefersReduced ?? false
 }
 
+// ─── Responsive card scale ────────────────────────────────────────
+// Devuelve un multiplicador para pasar a CreditCard según el viewport.
+// baseScale es el scale "ideal" en desktop; el hook lo reduce para que
+// la tarjeta nunca supere el ancho disponible con margen.
+function useResponsiveCardScale(baseScale = 1) {
+  const [vw, setVw] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1280)
+  useEffect(() => {
+    const update = () => setVw(window.innerWidth)
+    window.addEventListener('resize', update, { passive: true })
+    return () => window.removeEventListener('resize', update)
+  }, [])
+  // La tarjeta base mide 380px × scale. Queremos que quepa en vw - 48px (padding).
+  const maxW = vw - 48
+  const idealW = 380 * baseScale
+  if (idealW <= maxW) return baseScale
+  return Math.max(0.55, (maxW / 380))
+}
+
 // ─── Scroll Progress Bar ─────────────────────────────────────────
 function ScrollProgress() {
   const { scrollYProgress } = useScroll()
@@ -152,6 +170,46 @@ function AnimatedCounter({ to, prefix = '', suffix = '', duration = 2 }) {
   }, [inView, to, prefix, suffix, duration])
 
   return <span ref={ref}><span ref={nodeRef}>{prefix}0{suffix}</span></span>
+}
+
+// ─── Responsive card wrappers ────────────────────────────────────
+function HeroCard({ assemblyDelay = 0 }) {
+  const scale = useResponsiveCardScale(1.12)
+  const reduced = useSafeReducedMotion()
+  return (
+    <motion.div
+      animate={reduced ? {} : { y: [0, -12, 0] }}
+      transition={{ duration: 5, ease: 'easeInOut', repeat: Infinity }}
+    >
+      <CreditCard scale={scale} assemblyDelay={assemblyDelay} interactive={false} />
+    </motion.div>
+  )
+}
+
+function ShowcaseCard({ assemblyDelay = 0.35 }) {
+  const scale = useResponsiveCardScale(1.3)
+  const reduced = useSafeReducedMotion()
+  return (
+    <motion.div
+      animate={reduced ? {} : { y: [0, -10, 0], rotate: [-0.5, 0.5, -0.5] }}
+      transition={{ duration: 5.5, ease: 'easeInOut', repeat: Infinity }}
+    >
+      <CreditCard scale={scale} assemblyDelay={assemblyDelay} interactive={true} />
+    </motion.div>
+  )
+}
+
+function CTACard({ assemblyDelay = 0.2 }) {
+  const scale = useResponsiveCardScale(0.95)
+  const reduced = useSafeReducedMotion()
+  return (
+    <motion.div
+      animate={reduced ? {} : { y: [0, -8, 0], rotate: [-0.8, 0.8, -0.8] }}
+      transition={{ duration: 4.5, ease: 'easeInOut', repeat: Infinity }}
+    >
+      <CreditCard scale={scale} assemblyDelay={assemblyDelay} interactive={true} />
+    </motion.div>
+  )
 }
 
 // ─── Credit Card — Flip interactivo con cara frontal y trasera ──────
@@ -536,7 +594,7 @@ function Hero() {
   return (
     <section
       ref={ref}
-      className="relative min-h-screen bg-night overflow-hidden flex items-center pt-16"
+      className="relative min-h-screen bg-night overflow-x-hidden flex items-start lg:items-center pt-20 pb-16"
       onMouseMove={handleMouseMove}
     >
       {/* Dot grid */}
@@ -575,17 +633,17 @@ function Hero() {
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[200px] rounded-full blur-[80px] pointer-events-none"
         style={{ background: 'radial-gradient(ellipse, rgba(184,194,208,0.04) 0%, transparent 70%)' }} />
 
-      <div className="relative max-w-7xl mx-auto px-6 py-20 w-full">
-        <div className="grid lg:grid-cols-[1fr_500px] gap-12 items-center">
+      <div className="relative max-w-7xl mx-auto px-6 py-12 sm:py-16 lg:py-20 w-full">
+        <div className="grid lg:grid-cols-[1fr_500px] gap-12 lg:gap-16 items-center">
 
           {/* Left — text with parallax */}
-          <motion.div style={{ y: textY }} className="max-w-xl">
+          <motion.div style={{ y: textY }} className="w-full min-w-0">
             {/* Eyebrow badge */}
             <motion.div
               initial={reduced ? false : { opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.1, ease: expo }}
-              className="inline-flex items-center gap-2.5 border border-platinum/20 text-platinum text-xs font-sans font-semibold tracking-[0.18em] uppercase px-4 py-2 rounded-full mb-10 bg-platinum/5"
+              className="inline-flex items-center gap-2.5 border border-platinum/20 text-platinum text-xs font-sans font-semibold tracking-[0.18em] uppercase px-4 py-2 rounded-full mb-8 bg-platinum/5"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-platinum animate-pulse" />
               Solicitudes abiertas ahora
@@ -593,15 +651,15 @@ function Hero() {
 
             {/* Main headline — masked line reveal */}
             <h1
-              className="font-display font-light leading-[0.93] tracking-tight text-sand mb-7"
-              style={{ fontSize: 'clamp(52px, 7vw, 90px)' }}
+              className="font-display font-light leading-[0.93] tracking-tight text-sand mb-6"
+              style={{ fontSize: 'clamp(36px, 6.5vw, 90px)' }}
             >
               {[
                 { text: 'El dinero se mueve', cls: '' },
                 { text: 'a la velocidad', cls: 'text-platinum' },
                 { text: 'del pensamiento.', cls: '' },
               ].map((line, i) => (
-                <span key={i} className="block overflow-hidden leading-[1.05] pb-[0.04em]">
+                <span key={i} className="block overflow-hidden leading-[1.08] pb-[0.03em]">
                   <motion.span
                     className={`block ${line.cls}`}
                     initial={reduced ? false : { y: '110%', opacity: 0 }}
@@ -618,7 +676,7 @@ function Hero() {
               initial={reduced ? false : { opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.65, ease: expo }}
-              className="text-[17px] text-sand/45 font-sans leading-relaxed max-w-md mb-10"
+              className="text-[15px] sm:text-[17px] text-sand/45 font-sans leading-relaxed mb-8"
             >
               Una nueva clase de tarjeta de crédito diseñada para la forma en que realmente vives.
               Sin cuota anual. Sin cargos por divisas. Sin sorpresas.
@@ -628,14 +686,14 @@ function Hero() {
               initial={reduced ? false : { opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.8, ease: expo }}
-              className="flex flex-wrap items-center gap-3 mb-12"
+              className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 mb-10"
             >
               <motion.a
                 href="#"
                 whileHover={{ scale: 1.03, boxShadow: '0 0 32px -4px rgba(184,194,208,0.35)' }}
                 whileTap={{ scale: 0.97 }}
                 transition={{ duration: 0.18 }}
-                className="group flex items-center gap-2 bg-platinum text-night font-sans font-semibold px-8 py-4 rounded-full text-sm hover:bg-platinum-light transition-colors"
+                className="group flex items-center justify-center gap-2 bg-platinum text-night font-sans font-semibold px-8 py-4 rounded-full text-sm hover:bg-platinum-light transition-colors"
               >
                 Solicitar ahora
                 <RiArrowRightLine size={15} className="transition-transform duration-200 group-hover:translate-x-1" />
@@ -643,7 +701,7 @@ function Hero() {
               <motion.a
                 href="#"
                 whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.97 }}
-                className="text-sand/45 hover:text-sand font-sans text-sm px-6 py-4 rounded-full border border-sand/10 hover:border-sand/22 transition-all"
+                className="text-sand/45 hover:text-sand font-sans text-sm px-6 py-4 rounded-full border border-sand/10 hover:border-sand/22 transition-all text-center"
               >
                 Cómo funciona
               </motion.a>
@@ -654,38 +712,33 @@ function Hero() {
               initial={reduced ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.8, delay: 1.0 }}
-              className="flex items-center gap-3.5"
+              className="flex items-center gap-3.5 flex-wrap"
             >
-              <div className="flex -space-x-2.5">
+              <div className="flex -space-x-2.5 flex-shrink-0">
                 {['#4A5278','#3A3A6A','#5A3A7A','#6A4A70','#3A3878'].map((c, i) => (
                   <div key={i} className="w-8 h-8 rounded-full border-2 border-night flex items-center justify-center text-white text-[10px] font-sans font-bold" style={{ backgroundColor: c }}>
                     {['A','J','M','P','S'][i]}
                   </div>
                 ))}
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex gap-0.5 mb-0.5">
                   {[...Array(5)].map((_, i) => <RiStarFill key={i} size={11} className="text-platinum" />)}
                 </div>
-                <div className="text-xs text-sand/35 font-sans">Con la confianza de más de 50,000 clientes</div>
+                <div className="text-xs text-sand/35 font-sans whitespace-nowrap">Con la confianza de +50,000 clientes</div>
               </div>
             </motion.div>
           </motion.div>
 
           {/* Right — card con parallax */}
-          <motion.div style={{ y: cardY }} className="relative flex flex-col items-center justify-center lg:justify-end gap-6">
+          <motion.div style={{ y: cardY }} className="relative flex flex-col items-center justify-center lg:justify-end gap-6 mt-8 lg:mt-0">
             {/* Glow ambiente */}
             <div className="absolute w-[460px] h-[460px] rounded-full blur-[120px] pointer-events-none" style={{ background: 'rgba(184,194,208,0.07)' }} />
             <div className="absolute w-[280px] h-[280px] rounded-full blur-[60px] pointer-events-none" style={{ background: 'rgba(160,180,220,0.06)' }} />
 
-            {/* Tarjeta flotante */}
-            <div className="relative z-10">
-              <motion.div
-                animate={reduced ? {} : { y: [0, -12, 0] }}
-                transition={{ duration: 5, ease: 'easeInOut', repeat: Infinity }}
-              >
-                <CreditCard scale={1.12} assemblyDelay={0} interactive={false} />
-              </motion.div>
+            {/* Tarjeta flotante — escala responsiva */}
+            <div className="relative z-10 w-full flex justify-center">
+              <HeroCard assemblyDelay={0} />
             </div>
 
             {/* Spec pills debajo — igual que en CardShowcase */}
@@ -693,7 +746,7 @@ function Hero() {
               initial={reduced ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 1.5, ease: expo }}
-              className="relative z-10 flex gap-3"
+              className="relative z-10 flex gap-2 sm:gap-3 flex-wrap justify-center"
             >
               {[
                 { label: 'Material', value: 'Metal' },
@@ -863,7 +916,7 @@ function Features() {
   const [activeFeature, setActiveFeature] = useState(0)
 
   return (
-    <section className="py-32 bg-night" id="características">
+    <section className="py-20 sm:py-28 lg:py-32 bg-night" id="características">
       <div className="max-w-7xl mx-auto px-6">
         <div ref={headingRef} className="mb-20">
           <EyebrowReveal>Por qué Fintech</EyebrowReveal>
@@ -879,7 +932,7 @@ function Features() {
           </h2>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-5">
+        <div className="grid sm:grid-cols-2 gap-4 sm:gap-5">
           {FEATURES.map((f, i) => (
             <FeatureCard
               key={i} f={f} i={i}
@@ -963,9 +1016,9 @@ function StatItem({ s, i }) {
 
 function Stats() {
   return (
-    <section className="py-28 bg-night-lift border-y border-platinum/8">
+    <section className="py-16 sm:py-24 lg:py-28 bg-night-lift border-y border-platinum/8">
       <div className="max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-16">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-10 lg:gap-16">
           {STATS_DATA.map((s, i) => <StatItem key={i} s={s} i={i} />)}
         </div>
       </div>
@@ -1063,7 +1116,7 @@ function CardShowcase() {
   const headingInView = useInView(headingRef, { once: true, margin: '-50px' })
 
   return (
-    <section ref={sectionRef} className="relative py-36 overflow-hidden" style={{ background: 'linear-gradient(180deg, #08061A 0%, #0A0820 40%, #080616 100%)' }}>
+    <section ref={sectionRef} className="relative py-20 sm:py-28 lg:py-36 overflow-x-hidden" style={{ background: 'linear-gradient(180deg, #08061A 0%, #0A0820 40%, #080616 100%)' }}>
 
       {/* Fondo con glow masivo centrado */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -1075,9 +1128,9 @@ function CardShowcase() {
       }} />
 
       <div className="relative max-w-7xl mx-auto px-6">
-        <div className="grid lg:grid-cols-[1fr_1.1fr] gap-16 items-center">
-          {/* Texto */}
-          <div ref={headingRef}>
+        <div className="grid lg:grid-cols-[1fr_1.1fr] gap-12 lg:gap-16 items-center">
+          {/* Texto — orden 2 en móvil, 1 en desktop */}
+          <div ref={headingRef} className="order-2 lg:order-1">
             <EyebrowReveal>La tarjeta</EyebrowReveal>
             <h2
               className="font-display font-light text-sand leading-[0.93] mb-7"
@@ -1094,7 +1147,7 @@ function CardShowcase() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.7, delay: 0.25, ease: expo }}
-              className="text-[15px] text-sand/45 font-sans leading-relaxed mb-10 max-w-md"
+              className="text-[15px] text-sand/45 font-sans leading-relaxed mb-10 w-full"
             >
               Metal grabado con láser. Acabado platino mate. Fabricada con 85% de materiales reciclados.
               Diseñada para sentirse tan bien en la mano como funciona en cualquier país del mundo.
@@ -1126,15 +1179,15 @@ function CardShowcase() {
             </motion.div>
           </div>
 
-          {/* Tarjeta — grande, centrada, flip interactivo */}
-          <div className="flex flex-col items-center justify-center relative">
+          {/* Tarjeta — grande, centrada, flip interactivo — orden 1 en móvil */}
+          <div className="flex flex-col items-center justify-center relative order-1 lg:order-2">
             {/* Glow detrás de la tarjeta */}
             <div className="absolute w-[500px] h-[400px] rounded-full blur-[100px] pointer-events-none"
               style={{ background: 'radial-gradient(ellipse, rgba(184,194,208,0.09) 0%, transparent 65%)' }} />
             <div className="absolute w-[300px] h-[250px] rounded-full blur-[50px] pointer-events-none"
               style={{ background: 'radial-gradient(ellipse, rgba(150,180,230,0.06) 0%, transparent 65%)' }} />
 
-            <div style={{ perspective: '1400px' }}>
+            <div style={{ perspective: '1400px' }} className="w-full flex justify-center overflow-visible">
               <motion.div
                 style={{
                   rotateX: cardRotateX,
@@ -1143,12 +1196,7 @@ function CardShowcase() {
                   opacity: cardOpacity,
                 }}
               >
-                <motion.div
-                  animate={reduced ? {} : { y: [0, -10, 0], rotate: [-0.5, 0.5, -0.5] }}
-                  transition={{ duration: 5.5, ease: 'easeInOut', repeat: Infinity }}
-                >
-                  <CreditCard scale={1.3} assemblyDelay={0.35} interactive={true} />
-                </motion.div>
+                <ShowcaseCard assemblyDelay={0.35} />
               </motion.div>
             </div>
 
@@ -1172,7 +1220,7 @@ function CardShowcase() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.7, delay: 1.0, ease: expo }}
-                className="flex gap-3"
+                className="flex gap-2 sm:gap-3 flex-wrap justify-center"
               >
                 {[
                   { label: 'Material', value: 'Metal' },
@@ -1318,7 +1366,7 @@ function Pricing() {
   const headingInView = useInView(headingRef, { once: true, margin: '-50px' })
 
   return (
-    <section className="py-32 bg-night" id="precios">
+    <section className="py-20 sm:py-28 lg:py-32 bg-night" id="precios">
       <div className="max-w-7xl mx-auto px-6">
         <div ref={headingRef} className="mb-16 max-w-2xl">
           <EyebrowReveal>Precios</EyebrowReveal>
@@ -1331,7 +1379,7 @@ function Pricing() {
           </h2>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-5">
+        <div className="grid md:grid-cols-3 gap-4 sm:gap-5 max-w-lg md:max-w-none mx-auto">
           {PLANS.map((plan, i) => <PricingCard key={i} plan={plan} i={i} />)}
         </div>
       </div>
@@ -1422,7 +1470,7 @@ function Testimonials() {
   const headingInView = useInView(headingRef, { once: true, margin: '-50px' })
 
   return (
-    <section className="py-32 bg-night-lift border-t border-platinum/8">
+    <section className="py-20 sm:py-28 lg:py-32 bg-night-lift border-t border-platinum/8">
       <div className="max-w-7xl mx-auto px-6">
         <div ref={headingRef} className="mb-16">
           <EyebrowReveal>Lo que dicen</EyebrowReveal>
@@ -1435,7 +1483,7 @@ function Testimonials() {
           </h2>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-3 gap-4 sm:gap-6 max-w-lg md:max-w-none mx-auto">
           {TESTIMONIALS.map((t, i) => (
             <TestimonialCard key={i} t={t} i={i} />
           ))}
@@ -1459,7 +1507,7 @@ function FAQ() {
   const [hoveredItem, setHoveredItem] = useState(null)
 
   return (
-    <section className="py-28 bg-night-mid border-t border-platinum/8">
+    <section className="py-16 sm:py-24 lg:py-28 bg-night-mid border-t border-platinum/8">
       <div className="max-w-3xl mx-auto px-6">
         <Reveal className="mb-12">
           <h2 className="font-display font-light text-sand leading-tight" style={{ fontSize: 'clamp(34px, 4vw, 48px)' }}>
@@ -1560,17 +1608,12 @@ function CTA() {
   }
 
   return (
-    <section className="py-32 bg-night relative overflow-hidden border-t border-platinum/8">
+    <section className="py-20 sm:py-28 lg:py-32 bg-night relative overflow-x-hidden border-t border-platinum/8">
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[350px] rounded-full blur-[120px] pointer-events-none"
         style={{ background: 'radial-gradient(ellipse, rgba(184,194,208,0.055) 0%, transparent 70%)' }} />
       <div className="relative max-w-4xl mx-auto px-6 text-center">
         <div className="flex justify-center mb-10">
-          <motion.div
-            animate={reduced ? {} : { y: [0, -8, 0], rotate: [-0.8, 0.8, -0.8] }}
-            transition={{ duration: 4.5, ease: 'easeInOut', repeat: Infinity }}
-          >
-            <CreditCard scale={0.95} assemblyDelay={0.2} interactive={true} />
-          </motion.div>
+          <CTACard assemblyDelay={0.2} />
         </div>
         <div ref={headingRef}>
           <h2
@@ -1626,10 +1669,10 @@ function Footer() {
     Soporte:  ['Centro de ayuda','Contactanos','Estado del servicio','Terminos','Privacidad'],
   }
   return (
-    <footer className="text-sand py-20 border-t border-platinum/8" style={{ backgroundColor: '#040608' }}>
+    <footer className="text-sand py-16 sm:py-20 border-t border-platinum/8" style={{ backgroundColor: '#040608' }}>
       <div className="max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-14">
-          <div className="col-span-2 md:col-span-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 sm:gap-10 mb-14">
+          <div className="sm:col-span-2 md:col-span-1">
             <div className="font-display text-2xl font-semibold mb-3 tracking-tight">
               Fin<span className="text-platinum">tech</span>
             </div>
@@ -1652,7 +1695,12 @@ function Footer() {
         </div>
         <div className="pt-8 border-t border-platinum/8 flex flex-col md:flex-row justify-between gap-3">
           <div className="text-xs text-sand/18 font-sans">2026 Fintech Inc. Asegurado por FDIC. Todos los derechos reservados.</div>
-          <div className="text-xs text-sand/18 font-sans">Hecho con intencion.</div>
+          <div className="text-xs text-sand/18 font-sans">
+            Prototipo creado por{' '}
+            <a href="https://shiftco.mx" target="_blank" rel="noopener noreferrer" className="hover:text-sand/45 transition-colors duration-200">
+              shiftco.mx
+            </a>
+          </div>
         </div>
       </div>
     </footer>
