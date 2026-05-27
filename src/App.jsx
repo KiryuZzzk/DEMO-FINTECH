@@ -154,132 +154,291 @@ function AnimatedCounter({ to, prefix = '', suffix = '', duration = 2 }) {
   return <span ref={ref}><span ref={nodeRef}>{prefix}0{suffix}</span></span>
 }
 
-// ─── Credit Card — assembled with staggered parts ─────────────────
-function CreditCard({ scale = 1, assemblyDelay = 0 }) {
+// ─── Credit Card — Flip interactivo con cara frontal y trasera ──────
+function CreditCard({ scale = 1, assemblyDelay = 0, interactive = false }) {
   const cardRef = useRef(null)
   const mx = useMotionValue(0)
   const my = useMotionValue(0)
   const reduced = useSafeReducedMotion()
+  const [flipped, setFlipped] = useState(false)
 
-  const rotateX = useTransform(my, [-0.5, 0.5], [14, -14])
-  const rotateY = useTransform(mx, [-0.5, 0.5], [-14, 14])
-  const sx = useSpring(rotateX, { stiffness: 180, damping: 22 })
-  const sy = useSpring(rotateY, { stiffness: 180, damping: 22 })
+  // tilt base desde mouse
+  const tiltX = useTransform(my, [-0.5, 0.5], [12, -12])
+  const tiltY = useTransform(mx, [-0.5, 0.5], [-12, 12])
 
-  const shimmerX = useTransform(mx, [-0.5, 0.5], [10, 90])
-  const shimmerY = useTransform(my, [-0.5, 0.5], [10, 90])
-  const shimmer = useMotionTemplate`radial-gradient(ellipse at ${shimmerX}% ${shimmerY}%, rgba(200,212,228,0.38) 0%, transparent 58%)`
+  // flip base: 0 o 180
+  const flipBase = useMotionValue(0)
+  useEffect(() => {
+    animate(flipBase, flipped ? 180 : 0, { duration: 0.75, ease: [0.76, 0, 0.24, 1] })
+  }, [flipped, flipBase])
+
+  const sTiltX = useSpring(tiltX, { stiffness: 200, damping: 26 })
+  const sTiltY = useSpring(tiltY, { stiffness: 200, damping: 26 })
+  // Combina flip + tilt: cuando está flipeado el tilt se desactiva
+  const finalRotateY = useTransform(
+    [flipBase, sTiltY],
+    ([f, t]) => f + (f === 0 ? t : 0)
+  )
+  const finalRotateX = useTransform(
+    [flipBase, sTiltX],
+    ([f, t]) => f === 0 ? t : 0
+  )
+
+  // Shimmer holográfico — springs lentos para que vuelvan suavemente al centro
+  const shimmerRawX = useTransform(mx, [-0.5, 0.5], [5, 95])
+  const shimmerRawY = useTransform(my, [-0.5, 0.5], [5, 95])
+  const shimmerX = useSpring(shimmerRawX, { stiffness: 60, damping: 18 })
+  const shimmerY = useSpring(shimmerRawY, { stiffness: 60, damping: 18 })
+  const shimmer1 = useMotionTemplate`radial-gradient(ellipse 70% 55% at ${shimmerX}% ${shimmerY}%, rgba(220,230,245,0.45) 0%, transparent 60%)`
+  const shimmer2 = useMotionTemplate`radial-gradient(ellipse 40% 35% at ${shimmerX}% ${shimmerY}%, rgba(190,215,255,0.22) 0%, rgba(215,190,255,0.12) 40%, transparent 65%)`
 
   const handleMouseMove = useCallback((e) => {
-    if (!cardRef.current) return
+    if (!cardRef.current || flipped) return
     const r = cardRef.current.getBoundingClientRect()
     mx.set((e.clientX - r.left) / r.width - 0.5)
     my.set((e.clientY - r.top) / r.height - 0.5)
-  }, [mx, my])
+  }, [mx, my, flipped])
 
   const handleMouseLeave = useCallback(() => { mx.set(0); my.set(0) }, [mx, my])
+  const handleClick = useCallback(() => { if (interactive) setFlipped(f => !f) }, [interactive])
 
-  const w = Math.round(320 * scale)
-  const h = Math.round(200 * scale)
-  const p = Math.round(24 * scale)
+  const w = Math.round(380 * scale)
+  const h = Math.round(240 * scale)
+  const p = Math.round(28 * scale)
 
-  // Each part has its own assembly offset
   const part = (dx, dy, d) =>
     reduced ? {} : {
-      initial: { opacity: 0, x: dx, y: dy, filter: 'blur(2px)' },
+      initial: { opacity: 0, x: dx, y: dy, filter: 'blur(3px)' },
       animate: { opacity: 1, x: 0, y: 0, filter: 'blur(0px)' },
-      transition: { duration: 0.7, delay: assemblyDelay + 0.55 + d, ease: expo },
+      transition: { duration: 0.75, delay: assemblyDelay + 0.5 + d, ease: expo },
     }
+
+  // Cara frontal
+  const CardFront = () => (
+    <div
+      className="absolute inset-0 rounded-[22px] overflow-hidden"
+      style={{
+        backfaceVisibility: 'hidden',
+        WebkitBackfaceVisibility: 'hidden',
+        background: 'linear-gradient(135deg, #0D0B1F 0%, #16122E 30%, #1A1535 55%, #0E0B20 80%, #080714 100%)',
+      }}
+    >
+      {/* Shimmer holográfico */}
+      <motion.div className="absolute inset-0 pointer-events-none" style={{ background: shimmer1 }} />
+      <motion.div className="absolute inset-0 pointer-events-none mix-blend-screen" style={{ background: shimmer2 }} />
+
+      {/* Textura diagonal sutil */}
+      <div className="absolute inset-0 opacity-[0.035]" style={{
+        backgroundImage: 'repeating-linear-gradient(125deg, rgba(184,194,208,1) 0px, rgba(184,194,208,1) 1px, transparent 1px, transparent 28px)',
+      }} />
+
+      {/* Borde superior brillante */}
+      <div className="absolute top-0 left-0 right-0 h-px" style={{
+        background: 'linear-gradient(90deg, transparent 0%, rgba(205,218,238,0.7) 30%, rgba(230,240,255,0.95) 50%, rgba(205,218,238,0.7) 70%, transparent 100%)',
+      }} />
+      {/* Borde izquierdo */}
+      <div className="absolute top-0 left-0 bottom-0 w-px" style={{
+        background: 'linear-gradient(180deg, rgba(220,232,250,0.5) 0%, rgba(184,194,208,0.15) 60%, transparent 100%)',
+      }} />
+
+      {/* Glow interno esquina superior derecha */}
+      <div className="absolute top-0 right-0 w-40 h-40 pointer-events-none" style={{
+        background: 'radial-gradient(ellipse at top right, rgba(184,200,230,0.18) 0%, transparent 65%)',
+      }} />
+
+      {/* Contenido */}
+      <div className="absolute inset-0 flex flex-col justify-between" style={{ padding: p }}>
+        {/* Fila superior */}
+        <div className="flex items-start justify-between">
+          <motion.div {...part(-16, 0, 0)}>
+            <div style={{ fontSize: Math.round(18 * scale), letterSpacing: '0.06em', lineHeight: 1 }}>
+              <span className="font-display font-semibold" style={{ color: 'rgba(238,233,224,0.92)' }}>FIN</span>
+              <span className="font-display font-semibold" style={{ color: 'rgba(184,194,208,1)' }}>TECH</span>
+            </div>
+            <div style={{ fontSize: Math.round(8 * scale), letterSpacing: '0.3em', color: 'rgba(184,194,208,0.38)', fontFamily: 'sans-serif', marginTop: Math.round(3 * scale) }}>PLATINUM RESERVE</div>
+          </motion.div>
+
+          {/* Contactless icon */}
+          <motion.div {...part(16, 0, 0.08)}>
+            <svg width={Math.round(26 * scale)} height={Math.round(26 * scale)} viewBox="0 0 24 24" fill="none" style={{ color: 'rgba(184,194,208,0.65)' }}>
+              <path d="M12 4C16.97 4 21 8.03 21 13S16.97 22 12 22" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              <path d="M12 7.5C15.17 7.5 17.75 10.08 17.75 13.25S15.17 19 12 19" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              <path d="M12 11C13.38 11 14.5 12.12 14.5 13.5S13.38 16 12 16" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+          </motion.div>
+        </div>
+
+        {/* Chip EMV */}
+        <motion.div {...part(-12, -8, 0.16)} style={{ marginTop: Math.round(-4 * scale) }}>
+          <div style={{
+            width: Math.round(48 * scale), height: Math.round(36 * scale),
+            borderRadius: Math.round(6 * scale),
+            background: 'linear-gradient(135deg, #8A9BAC 0%, #D8E4F2 25%, #C8D6E8 45%, #B0C0D2 65%, #D4E0EE 80%, #9AAABB 100%)',
+            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.35), 0 ${Math.round(2*scale)}px ${Math.round(6*scale)}px rgba(0,0,0,0.4)`,
+            position: 'relative', overflow: 'hidden',
+          }}>
+            <div style={{ position: 'absolute', inset: 0, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: Math.round(2.5 * scale), padding: Math.round(5 * scale) }}>
+              {[...Array(6)].map((_, i) => (
+                <div key={i} style={{ backgroundColor: 'rgba(30,50,70,0.28)', borderRadius: Math.round(1.5 * scale) }} />
+              ))}
+            </div>
+            <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: 'rgba(30,50,70,0.2)', transform: 'translateY(-50%)' }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 50%, rgba(0,0,0,0.08) 100%)' }} />
+          </div>
+        </motion.div>
+
+        {/* Número + datos */}
+        <div>
+          <motion.div {...part(0, 12, 0.26)}>
+            <div style={{
+              fontFamily: 'monospace',
+              letterSpacing: Math.round(3.5 * scale) + 'px',
+              fontSize: Math.round(15 * scale),
+              color: 'rgba(220,230,245,0.75)',
+              marginBottom: Math.round(14 * scale),
+              textShadow: '0 0 20px rgba(184,194,208,0.3)',
+            }}>
+              4289 •••• •••• 7741
+            </div>
+          </motion.div>
+          <div className="flex justify-between items-end">
+            <motion.div {...part(-10, 8, 0.34)}>
+              <div style={{ fontSize: Math.round(8 * scale), letterSpacing: '0.28em', color: 'rgba(184,194,208,0.3)', textTransform: 'uppercase', fontFamily: 'sans-serif', marginBottom: Math.round(3 * scale) }}>Titular</div>
+              <div style={{ fontSize: Math.round(13 * scale), color: 'rgba(220,230,245,0.72)', fontFamily: 'sans-serif', letterSpacing: '0.05em' }}>ALEX MORGAN</div>
+            </motion.div>
+            <motion.div {...part(10, 8, 0.36)} style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: Math.round(8 * scale), letterSpacing: '0.28em', color: 'rgba(184,194,208,0.3)', textTransform: 'uppercase', fontFamily: 'sans-serif', marginBottom: Math.round(3 * scale) }}>Vence</div>
+              <div style={{ fontSize: Math.round(13 * scale), color: 'rgba(220,230,245,0.72)', fontFamily: 'sans-serif' }}>12/29</div>
+            </motion.div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  // Cara trasera — shimmer siguiendo el mouse igual que el frente
+  const CardBack = () => (
+    <div
+      className="absolute inset-0 rounded-[22px] overflow-hidden"
+      style={{
+        backfaceVisibility: 'hidden',
+        WebkitBackfaceVisibility: 'hidden',
+        transform: 'rotateY(180deg)',
+        background: 'linear-gradient(160deg, #0E0B22 0%, #151130 35%, #1A1540 65%, #100D26 100%)',
+      }}
+    >
+      {/* Shimmer dinámico — usa los mismos motion values que el frente, espejado */}
+      <motion.div className="absolute inset-0 pointer-events-none" style={{ background: shimmer1 }} />
+      <motion.div className="absolute inset-0 pointer-events-none mix-blend-screen" style={{ background: shimmer2 }} />
+
+      {/* Glow base fijo — da profundidad sin el mouse */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: 'linear-gradient(125deg, transparent 20%, rgba(184,194,208,0.04) 45%, rgba(200,215,240,0.03) 55%, transparent 75%)',
+      }} />
+
+      {/* Bordes luminosos */}
+      <div className="absolute top-0 left-0 right-0 h-px" style={{
+        background: 'linear-gradient(90deg, transparent, rgba(184,194,208,0.55) 35%, rgba(210,225,250,0.8) 50%, rgba(184,194,208,0.55) 65%, transparent)',
+      }} />
+      <div className="absolute bottom-0 left-0 right-0 h-px" style={{
+        background: 'linear-gradient(90deg, transparent, rgba(184,194,208,0.2) 50%, transparent)',
+      }} />
+      <div className="absolute top-0 left-0 bottom-0 w-px" style={{
+        background: 'linear-gradient(180deg, rgba(200,215,245,0.4) 0%, rgba(184,194,208,0.1) 60%, transparent 100%)',
+      }} />
+
+      {/* Banda magnética */}
+      <div className="absolute left-0 right-0" style={{
+        top: Math.round(36 * scale),
+        height: Math.round(44 * scale),
+        background: 'linear-gradient(180deg, #252525 0%, #111 50%, #1E1E1E 100%)',
+        boxShadow: `0 ${Math.round(2*scale)}px ${Math.round(10*scale)}px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.4)`,
+      }}>
+        <div className="absolute inset-0" style={{
+          background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 30%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.04) 70%, transparent 100%)',
+        }} />
+      </div>
+
+      {/* Firma + CVV */}
+      <div className="absolute left-0 right-0" style={{ top: Math.round(104 * scale), padding: `0 ${p}px` }}>
+        <div style={{
+          height: Math.round(36 * scale),
+          borderRadius: Math.round(3 * scale),
+          background: 'linear-gradient(180deg, #EDEAE2 0%, #F5F0EA 50%, #E8E4DC 100%)',
+          display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+          padding: `0 ${Math.round(12 * scale)}px`,
+          position: 'relative', overflow: 'hidden',
+          boxShadow: `0 ${Math.round(2*scale)}px ${Math.round(6*scale)}px rgba(0,0,0,0.35)`,
+        }}>
+          {[...Array(7)].map((_, i) => (
+            <div key={i} style={{ position: 'absolute', left: Math.round(12*scale), right: Math.round(64*scale), height: 1, backgroundColor: 'rgba(80,80,80,0.15)', top: Math.round((6 + i * 4.2) * scale) }} />
+          ))}
+          <div style={{
+            width: Math.round(46 * scale), height: Math.round(26 * scale),
+            background: 'linear-gradient(145deg, #fff 0%, #f0f0f0 100%)',
+            borderRadius: Math.round(3 * scale),
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.15)',
+          }}>
+            <span style={{ fontFamily: 'monospace', fontSize: Math.round(12 * scale), color: '#1a1a2e', letterSpacing: '0.1em', fontWeight: 700 }}>737</span>
+          </div>
+        </div>
+        <div style={{ fontSize: Math.round(7 * scale), color: 'rgba(184,194,208,0.28)', fontFamily: 'sans-serif', letterSpacing: '0.14em', textTransform: 'uppercase', marginTop: Math.round(5 * scale) }}>Código de seguridad (CVV)</div>
+      </div>
+
+      {/* Info inferior — logo red de pago derecha, datos izquierda */}
+      <div className="absolute bottom-0 left-0 right-0" style={{ padding: `${Math.round(14*scale)}px ${p}px` }}>
+        <div className="flex items-end justify-between">
+          <div>
+            <div style={{ fontSize: Math.round(6.5*scale), color: 'rgba(184,194,208,0.22)', fontFamily: 'sans-serif', lineHeight: 1.6, letterSpacing: '0.03em' }}>
+              Válida hasta 12/29<br/>
+              Propiedad de Fintech Inc.
+            </div>
+            <div style={{ marginTop: Math.round(5*scale), fontSize: Math.round(10*scale), color: 'rgba(184,194,208,0.42)', fontFamily: 'serif', letterSpacing: '0.14em', fontWeight: 300 }}>PLATINUM RESERVE</div>
+          </div>
+          {/* Dos círculos solapados — logo estilo Mastercard/red de pago */}
+          <div style={{ display: 'flex', alignItems: 'center', opacity: 0.5 }}>
+            <div style={{
+              width: Math.round(26*scale), height: Math.round(26*scale), borderRadius: '50%',
+              background: 'rgba(220,60,40,0.7)', marginRight: Math.round(-10*scale),
+              boxShadow: `0 0 ${Math.round(6*scale)}px rgba(220,60,40,0.3)`,
+            }} />
+            <div style={{
+              width: Math.round(26*scale), height: Math.round(26*scale), borderRadius: '50%',
+              background: 'rgba(255,160,0,0.65)',
+              boxShadow: `0 0 ${Math.round(6*scale)}px rgba(255,160,0,0.25)`,
+            }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div
       ref={cardRef}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      style={{ perspective: '1100px', width: w, height: h }}
-      className="select-none"
+      onClick={handleClick}
+      style={{ perspective: '1400px', width: w, height: h }}
+      className={`select-none ${interactive ? 'cursor-pointer' : ''}`}
     >
       <motion.div
-        initial={reduced ? false : { opacity: 0, scale: 0.86, y: 16 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.95, delay: assemblyDelay + 0.3, ease: expo }}
+        initial={reduced ? false : { opacity: 0, scale: 0.82, y: 24, rotateX: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0, rotateX: 0 }}
+        transition={{ duration: 1.05, delay: assemblyDelay + 0.2, ease: expo }}
         style={{
-          rotateX: reduced ? 0 : sx,
-          rotateY: reduced ? 0 : sy,
+          rotateX: reduced ? 0 : finalRotateX,
+          rotateY: reduced ? 0 : finalRotateY,
           transformStyle: 'preserve-3d',
           width: w, height: h,
-          background: 'linear-gradient(145deg, #0A0818 0%, #130F28 50%, #0C0A1C 100%)',
-          boxShadow: '0 40px 80px -16px rgba(0,0,0,0.9), 0 0 0 1px rgba(184,194,208,0.2), inset 0 1px 0 rgba(200,212,228,0.12)',
+          position: 'relative',
+          boxShadow: '0 50px 100px -20px rgba(0,0,0,0.95), 0 20px 40px -10px rgba(0,0,0,0.7), 0 0 0 1px rgba(184,194,208,0.18), 0 0 60px -20px rgba(184,194,208,0.12)',
+          borderRadius: 22,
         }}
-        className="rounded-[20px] relative overflow-hidden cursor-pointer"
       >
-        {/* Shimmer overlay */}
-        <motion.div className="absolute inset-0" style={{ background: shimmer }} />
-
-        {/* Grid texture */}
-        <div className="absolute inset-0 opacity-[0.04]" style={{
-          backgroundImage: 'linear-gradient(rgba(184,194,208,1) 1px, transparent 1px), linear-gradient(90deg, rgba(184,194,208,1) 1px, transparent 1px)',
-          backgroundSize: '38px 38px',
-        }} />
-
-        {/* Top edge */}
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-platinum/50 to-transparent" />
-
-        {/* Content layer */}
-        <div className="absolute inset-0 flex flex-col justify-between" style={{ padding: p }}>
-
-          {/* Top row */}
-          <div className="flex items-start justify-between">
-            {/* Logo */}
-            <motion.div {...part(-14, 0, 0)}>
-              <span className="font-display font-semibold text-sand/90" style={{ fontSize: Math.round(16 * scale), letterSpacing: '0.04em' }}>Fin</span>
-              <span className="font-display font-semibold text-platinum" style={{ fontSize: Math.round(16 * scale), letterSpacing: '0.04em' }}>tech</span>
-            </motion.div>
-
-            {/* Contactless */}
-            <motion.div {...part(14, 0, 0.08)}>
-              <svg width={Math.round(22 * scale)} height={Math.round(22 * scale)} viewBox="0 0 22 22" fill="none" style={{ color: 'rgba(184,194,208,0.7)', marginTop: 2 }}>
-                <path d="M11 3.5C15.69 3.5 19.5 7.31 19.5 12S15.69 20.5 11 20.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                <path d="M11 7C13.76 7 16 9.24 16 12S13.76 17 11 17" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                <path d="M11 10.5C12.38 10.5 13.5 11.62 13.5 13S12.38 15.5 11 15.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-              </svg>
-            </motion.div>
-          </div>
-
-          {/* Chip */}
-          <motion.div {...part(-10, -6, 0.18)}>
-            <div style={{
-              width: Math.round(40 * scale), height: Math.round(30 * scale),
-              borderRadius: Math.round(5 * scale),
-              background: 'linear-gradient(135deg, #7A8898 0%, #CDD6E4 35%, #B8C2D0 65%, #8A9AAA 100%)',
-              position: 'relative', overflow: 'hidden',
-            }}>
-              <div style={{ position: 'absolute', inset: 0, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, padding: 4 }}>
-                {[...Array(6)].map((_, i) => <div key={i} style={{ backgroundColor: 'rgba(40,60,80,0.35)', borderRadius: 1 }} />)}
-              </div>
-              <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: 'rgba(40,60,80,0.25)', transform: 'translateY(-50%)' }} />
-            </div>
-          </motion.div>
-
-          {/* Bottom: number + name/expiry */}
-          <div>
-            <motion.div {...part(0, 10, 0.28)}>
-              <div className="text-sand/70 font-sans tracking-[0.22em] mb-3" style={{ fontSize: Math.round(13 * scale) }}>
-                4289 •••• •••• 7741
-              </div>
-            </motion.div>
-            <div className="flex justify-between items-end">
-              <motion.div {...part(-8, 6, 0.36)}>
-                <div className="text-sand/30 uppercase tracking-widest mb-0.5 font-sans" style={{ fontSize: Math.round(9 * scale) }}>Titular</div>
-                <div className="text-sand/70 font-sans" style={{ fontSize: Math.round(12 * scale) }}>Alex Morgan</div>
-              </motion.div>
-              <motion.div {...part(8, 6, 0.38)}>
-                <div className="text-sand/30 uppercase tracking-widest mb-0.5 font-sans text-right" style={{ fontSize: Math.round(9 * scale) }}>Vence</div>
-                <div className="text-sand/70 font-sans" style={{ fontSize: Math.round(12 * scale) }}>12/29</div>
-              </motion.div>
-            </div>
-          </div>
-        </div>
+        <CardFront />
+        <CardBack />
       </motion.div>
     </div>
   )
@@ -382,26 +541,39 @@ function Hero() {
     >
       {/* Dot grid */}
       <motion.div
-        className="absolute inset-0 opacity-[0.14]"
+        className="absolute inset-0"
         style={{ opacity: bgOpacity }}
       >
-        <div className="absolute inset-0" style={{
-          backgroundImage: 'radial-gradient(circle, rgba(184,194,208,0.6) 1px, transparent 1px)',
-          backgroundSize: '38px 38px',
+        <div className="absolute inset-0 opacity-[0.12]" style={{
+          backgroundImage: 'radial-gradient(circle, rgba(184,194,208,0.7) 1px, transparent 1px)',
+          backgroundSize: '40px 40px',
         }} />
       </motion.div>
 
-      {/* Radial vignette */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_25%,#06080A_80%)] pointer-events-none" />
+      {/* Líneas diagonales premium — muy sutiles */}
+      <div className="absolute inset-0 opacity-[0.012]">
+        <div className="absolute inset-0" style={{
+          backgroundImage: 'repeating-linear-gradient(135deg, rgba(184,194,208,1) 0px, rgba(184,194,208,1) 1px, transparent 1px, transparent 60px)',
+        }} />
+      </div>
 
-      {/* Cursor spotlight */}
+      {/* Radial vignette más profundo */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: 'radial-gradient(ellipse 85% 80% at 50% 50%, transparent 20%, rgba(6,8,10,0.85) 75%, #06080A 100%)'
+      }} />
+
+      {/* Cursor spotlight — más intenso */}
       {!reduced && (
         <motion.div className="absolute inset-0 pointer-events-none" style={{ background: spotlight }} />
       )}
 
-      {/* Ambient glow */}
-      <div className="absolute top-0 right-0 w-[700px] h-[600px] rounded-full blur-[140px] pointer-events-none"
-        style={{ background: 'radial-gradient(circle, rgba(184,194,208,0.06) 0%, transparent 70%)' }} />
+      {/* Ambient glow — triple capa */}
+      <div className="absolute top-[-10%] right-[-5%] w-[800px] h-[700px] rounded-full blur-[160px] pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(184,194,208,0.07) 0%, transparent 65%)' }} />
+      <div className="absolute top-[20%] left-[-10%] w-[500px] h-[500px] rounded-full blur-[130px] pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(130,150,200,0.04) 0%, transparent 65%)' }} />
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[200px] rounded-full blur-[80px] pointer-events-none"
+        style={{ background: 'radial-gradient(ellipse, rgba(184,194,208,0.04) 0%, transparent 70%)' }} />
 
       <div className="relative max-w-7xl mx-auto px-6 py-20 w-full">
         <div className="grid lg:grid-cols-[1fr_500px] gap-12 items-center">
@@ -500,59 +672,37 @@ function Hero() {
             </motion.div>
           </motion.div>
 
-          {/* Right — card with parallax */}
-          <motion.div style={{ y: cardY }} className="relative flex items-center justify-center lg:justify-end">
-            <div className="absolute w-80 h-80 rounded-full blur-[100px] pointer-events-none" style={{ background: 'rgba(184,194,208,0.06)' }} />
+          {/* Right — card con parallax */}
+          <motion.div style={{ y: cardY }} className="relative flex flex-col items-center justify-center lg:justify-end gap-6">
+            {/* Glow ambiente */}
+            <div className="absolute w-[460px] h-[460px] rounded-full blur-[120px] pointer-events-none" style={{ background: 'rgba(184,194,208,0.07)' }} />
+            <div className="absolute w-[280px] h-[280px] rounded-full blur-[60px] pointer-events-none" style={{ background: 'rgba(160,180,220,0.06)' }} />
 
+            {/* Tarjeta flotante */}
             <div className="relative z-10">
-              {/* Float loop wraps assembled card */}
               <motion.div
-                animate={reduced ? {} : { y: [0, -10, 0] }}
-                transition={{ duration: 4.5, ease: 'easeInOut', repeat: Infinity }}
+                animate={reduced ? {} : { y: [0, -12, 0] }}
+                transition={{ duration: 5, ease: 'easeInOut', repeat: Infinity }}
               >
-                <CreditCard scale={1.05} assemblyDelay={0} />
-
-                {/* Badge: seguridad */}
-                <motion.div
-                  initial={reduced ? false : { opacity: 0, x: -16 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.7, delay: 1.4, ease: expo }}
-                  className="absolute -left-4 top-6 bg-night-lift border border-platinum/15 rounded-2xl shadow-xl px-4 py-3 flex items-center gap-3"
-                >
-                  <div className="w-8 h-8 bg-platinum/10 rounded-full flex items-center justify-center flex-shrink-0">
-                    <RiShieldCheckFill size={16} className="text-platinum" />
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-sans font-semibold text-sand leading-none mb-0.5">Nivel bancario</div>
-                    <div className="text-[10px] text-sand/35 font-sans">Cifrado 256-bit</div>
-                  </div>
-                </motion.div>
-
-                {/* Badge: cashback */}
-                <motion.div
-                  initial={reduced ? false : { opacity: 0, x: 16 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.7, delay: 1.55, ease: expo }}
-                  className="absolute -right-2 bottom-10 bg-night-lift border border-platinum/15 rounded-2xl shadow-xl px-4 py-3 min-w-[120px]"
-                >
-                  <div className="text-[10px] text-sand/35 font-sans mb-1">Cashback ganado</div>
-                  <div className="font-display text-xl font-semibold text-sand leading-none mb-1">$124.50</div>
-                  <div className="text-[10px] text-emerald-400 font-sans font-medium">↑ +5.2% este mes</div>
-                </motion.div>
-
-                {/* Badge: transfer */}
-                <motion.div
-                  initial={reduced ? false : { opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.7, delay: 1.65, ease: expo }}
-                  className="absolute -bottom-5 left-10 bg-platinum rounded-2xl px-4 py-3 shadow-lg"
-                  style={{ boxShadow: '0 8px 32px -4px rgba(184,194,208,0.22)' }}
-                >
-                  <div className="text-[10px] text-night/55 font-sans mb-0.5">Transferencia instantánea</div>
-                  <div className="text-[13px] font-sans font-semibold text-night">$2,400.00 enviado ✓</div>
-                </motion.div>
+                <CreditCard scale={1.12} assemblyDelay={0} interactive={false} />
               </motion.div>
             </div>
+
+            {/* Spec pills debajo — igual que en CardShowcase */}
+            <motion.div
+              initial={reduced ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 1.5, ease: expo }}
+              className="relative z-10 flex gap-3"
+            >
+              {[
+                { label: 'Material', value: 'Metal' },
+                { label: 'Cashback', value: '5%' },
+                { label: 'Cuota anual', value: '$0' },
+              ].map((spec, i) => (
+                <SpecPill key={i} spec={spec} i={i} />
+              ))}
+            </motion.div>
           </motion.div>
         </div>
       </div>
@@ -581,15 +731,24 @@ const TICKER_ITEMS = [
 
 function Ticker() {
   return (
-    <div className="py-4 overflow-hidden border-y border-platinum/10 bg-night-mid">
+    <div className="relative py-3.5 overflow-hidden border-y" style={{
+      borderColor: 'rgba(184,194,208,0.1)',
+      background: 'linear-gradient(180deg, rgba(14,12,28,0.95) 0%, rgba(10,8,20,0.98) 100%)',
+    }}>
+      {/* Fade masks en los bordes */}
+      <div className="absolute left-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
+        style={{ background: 'linear-gradient(90deg, #06080A 0%, transparent 100%)' }} />
+      <div className="absolute right-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
+        style={{ background: 'linear-gradient(270deg, #06080A 0%, transparent 100%)' }} />
       <motion.div
         animate={{ x: ['0%', '-50%'] }}
-        transition={{ duration: 30, ease: 'linear', repeat: Infinity }}
-        className="flex gap-10 whitespace-nowrap will-change-transform"
+        transition={{ duration: 35, ease: 'linear', repeat: Infinity }}
+        className="flex gap-12 whitespace-nowrap will-change-transform"
       >
         {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
-          <span key={i} className="inline-flex items-center gap-3 text-sm font-sans font-medium text-sand/32 tracking-wide">
-            <span className="w-1 h-1 rounded-full bg-platinum/55 flex-shrink-0" />
+          <span key={i} className="inline-flex items-center gap-3.5 font-sans font-semibold tracking-[0.18em] uppercase"
+            style={{ fontSize: 10, color: 'rgba(184,194,208,0.3)' }}>
+            <span className="w-1 h-1 rounded-full flex-shrink-0" style={{ backgroundColor: 'rgba(184,194,208,0.5)' }} />
             {item}
           </span>
         ))}
@@ -606,9 +765,102 @@ const FEATURES = [
   { Icon: RiCustomerService2Line, eyebrow: 'Siempre disponible', title: 'Un concierge\nen tu bolsillo.', desc: 'Personas reales, disponibles 24/7, por chat, teléfono o video. Sin bots, sin scripts, sin música de espera.', stat: '24/7', statLabel: 'soporte humano', accent: '#C4A898', bg: 'rgba(196,168,152,0.07)' },
 ]
 
+function FeatureCard({ f, i, isActive, onClick }) {
+  const reduced = useSafeReducedMotion()
+  const xOffset = i % 2 === 0 ? -30 : 30
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: xOffset, y: 20 }}
+      whileInView={{ opacity: 1, x: 0, y: 0 }}
+      viewport={{ once: true, margin: '-60px' }}
+      transition={{ duration: 0.8, delay: i * 0.08, ease: expo }}
+      onClick={onClick}
+      whileHover={{ y: -8 }}
+      whileTap={{ scale: 0.985 }}
+      className="relative border rounded-2xl p-8 cursor-pointer overflow-hidden"
+      style={{
+        background: isActive
+          ? `linear-gradient(145deg, rgba(28,22,52,0.95), rgba(18,14,36,0.98))`
+          : 'linear-gradient(145deg, rgba(22,18,42,0.7), rgba(14,12,28,0.9))',
+        borderColor: isActive ? f.accent + '55' : 'rgba(238,233,224,0.06)',
+        transition: 'border-color 0.3s, background 0.3s',
+      }}
+    >
+      {/* Glow de acento al activar */}
+      <motion.div
+        className="absolute inset-0 pointer-events-none rounded-2xl"
+        animate={{ opacity: isActive ? 1 : 0 }}
+        transition={{ duration: 0.4 }}
+        style={{ background: `radial-gradient(ellipse 60% 50% at 30% 30%, ${f.accent}18 0%, transparent 70%)` }}
+      />
+
+      {/* Ícono — escala al activar/hover */}
+      <motion.div
+        className="relative rounded-xl flex items-center justify-center mb-5"
+        animate={{
+          width: isActive ? 56 : 44,
+          height: isActive ? 56 : 44,
+          backgroundColor: isActive ? f.accent + '22' : f.bg,
+          boxShadow: isActive ? `0 0 24px -4px ${f.accent}55` : 'none',
+        }}
+        transition={{ duration: 0.35, ease: expo }}
+      >
+        <motion.div
+          animate={{ scale: isActive ? 1.3 : 1, rotate: isActive ? 8 : 0 }}
+          transition={{ duration: 0.4, ease: expo }}
+        >
+          <f.Icon size={isActive ? 24 : 20} style={{ color: f.accent }} />
+        </motion.div>
+      </motion.div>
+
+      <motion.div
+        className="text-[11px] font-sans font-semibold tracking-[0.22em] uppercase mb-2"
+        animate={{ opacity: isActive ? 1 : 0.6 }}
+        style={{ color: f.accent }}
+      >
+        {f.eyebrow}
+      </motion.div>
+
+      <h3 className="font-display font-light text-sand leading-tight mb-4" style={{ fontSize: 'clamp(22px, 2.2vw, 28px)', whiteSpace: 'pre-line' }}>{f.title}</h3>
+
+      {/* Descripción — aparece al activar */}
+      <motion.p
+        className="text-sm font-sans leading-relaxed max-w-xs"
+        animate={{ opacity: isActive ? 1 : 0.45, height: 'auto' }}
+        style={{ color: 'rgba(238,233,224,0.45)', marginBottom: 28 }}
+      >
+        {f.desc}
+      </motion.p>
+
+      <motion.div
+        className="flex items-baseline gap-2.5 pt-6"
+        style={{ borderTop: '1px solid rgba(238,233,224,0.06)' }}
+      >
+        <motion.span
+          className="font-display font-light text-sand"
+          animate={{ fontSize: isActive ? 'clamp(36px,4vw,48px)' : 'clamp(32px,3.5vw,42px)' }}
+          transition={{ duration: 0.35, ease: expo }}
+        >
+          {f.stat}
+        </motion.span>
+        <span className="text-[11px] text-sand/28 font-sans tracking-widest uppercase">{f.statLabel}</span>
+      </motion.div>
+
+      {/* Indicador activo */}
+      <motion.div
+        className="absolute top-4 right-4 w-1.5 h-1.5 rounded-full"
+        animate={{ opacity: isActive ? 1 : 0, scale: isActive ? 1 : 0 }}
+        transition={{ duration: 0.3 }}
+        style={{ backgroundColor: f.accent }}
+      />
+    </motion.div>
+  )
+}
+
 function Features() {
   const headingRef = useRef(null)
   const headingInView = useInView(headingRef, { once: true, margin: '-50px' })
+  const [activeFeature, setActiveFeature] = useState(0)
 
   return (
     <section className="py-32 bg-night" id="características">
@@ -628,64 +880,12 @@ function Features() {
         </div>
 
         <div className="grid md:grid-cols-2 gap-5">
-          {FEATURES.map((f, i) => {
-            // Alternate: even cards from left, odd from right
-            const xOffset = i % 2 === 0 ? -30 : 30
-            return (
-              <Reveal key={i} delay={i * 0.07} y={0}>
-                <motion.div
-                  initial={{ opacity: 0, x: xOffset, y: 20 }}
-                  whileInView={{ opacity: 1, x: 0, y: 0 }}
-                  viewport={{ once: true, margin: '-60px' }}
-                  transition={{ duration: 0.8, delay: i * 0.07, ease: expo }}
-                  whileHover={{ y: -6, borderColor: 'rgba(184,194,208,0.22)' }}
-                  className="border border-sand/6 rounded-2xl p-8 transition-colors duration-300 cursor-default"
-                  style={{ background: 'linear-gradient(145deg, rgba(22,18,42,0.7), rgba(14,12,28,0.9))' }}
-                >
-                  <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-5" style={{ backgroundColor: f.bg }}>
-                    <f.Icon size={20} style={{ color: f.accent }} />
-                  </div>
-                  <div className="text-[11px] font-sans font-semibold tracking-[0.22em] uppercase mb-2" style={{ color: f.accent }}>{f.eyebrow}</div>
-                  <h3 className="font-display font-light text-sand leading-tight mb-4" style={{ fontSize: 'clamp(22px, 2.2vw, 28px)', whiteSpace: 'pre-line' }}>{f.title}</h3>
-                  <p className="text-sm text-sand/42 font-sans leading-relaxed mb-7 max-w-xs">{f.desc}</p>
-                  <div className="flex items-baseline gap-2.5 pt-6 border-t border-sand/6">
-                    <span className="font-display font-light text-sand" style={{ fontSize: 'clamp(32px, 3.5vw, 42px)' }}>{f.stat}</span>
-                    <span className="text-[11px] text-sand/28 font-sans tracking-widest uppercase">{f.statLabel}</span>
-                  </div>
-                </motion.div>
-              </Reveal>
-            )
-          })}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ─── Stats ────────────────────────────────────────────────────────
-function Stats() {
-  const STATS = [
-    { to: 0, prefix: '$', suffix: '', label: 'Cuota anual', special: 'Cero' },
-    { to: 5, prefix: '', suffix: '%', label: 'Cashback promedio' },
-    { to: 195, prefix: '', suffix: '', label: 'Países aceptados' },
-    { to: 50000, prefix: '', suffix: '+', label: 'Clientes satisfechos' },
-  ]
-
-  return (
-    <section className="py-28 bg-night-lift border-y border-platinum/8">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-16">
-          {STATS.map((s, i) => (
-            <Reveal key={i} delay={i * 0.1}>
-              <div>
-                <div className="font-display font-light mb-2" style={{ fontSize: 'clamp(44px, 5vw, 64px)', color: '#CDD6E4' }}>
-                  {s.special
-                    ? <span>{s.special}</span>
-                    : <AnimatedCounter to={s.to} prefix={s.prefix} suffix={s.suffix} />}
-                </div>
-                <div className="text-sand/35 font-sans text-sm tracking-wide">{s.label}</div>
-              </div>
-            </Reveal>
+          {FEATURES.map((f, i) => (
+            <FeatureCard
+              key={i} f={f} i={i}
+              isActive={activeFeature === i}
+              onClick={() => setActiveFeature(i)}
+            />
           ))}
         </div>
       </div>
@@ -693,30 +893,195 @@ function Stats() {
   )
 }
 
-// ─── Card Showcase — scroll-driven card presentation ───────────────
+// ─── Stats ────────────────────────────────────────────────────────
+const STATS_DATA = [
+  { to: 0, prefix: '$', suffix: '', label: 'Cuota anual', special: 'Cero', accent: '#B8C2D0' },
+  { to: 5, prefix: '', suffix: '%', label: 'Cashback promedio', accent: '#7ABFA0' },
+  { to: 195, prefix: '', suffix: '', label: 'Países aceptados', accent: '#8AAACE' },
+  { to: 50000, prefix: '', suffix: '+', label: 'Clientes satisfechos', accent: '#C4A898' },
+]
+
+function StatItem({ s, i }) {
+  const [hovered, setHovered] = useState(false)
+  const ref = useRef(null)
+  const nodeRef = useRef(null)
+  const inView = useInView(ref, { once: false, margin: '-40px' })
+
+  useEffect(() => {
+    if ((!inView && !hovered) || !nodeRef.current || s.special) return
+    const ctrl = animate(0, s.to, {
+      duration: hovered ? 1.2 : 2,
+      ease: [0.22, 1, 0.36, 1],
+      onUpdate: (v) => { if (nodeRef.current) nodeRef.current.textContent = s.prefix + Math.round(v).toLocaleString() + s.suffix },
+    })
+    return () => ctrl.stop()
+  }, [inView, hovered, s.to, s.prefix, s.suffix, s.special])
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-40px' }}
+      transition={{ duration: 0.7, delay: i * 0.1, ease: expo }}
+      onHoverStart={() => setHovered(true)}
+      onHoverEnd={() => setHovered(false)}
+      className="relative cursor-default group"
+    >
+      {/* Línea de acento que aparece al hover */}
+      <motion.div
+        className="absolute -top-4 left-0 h-px"
+        animate={{ width: hovered ? 40 : 0, opacity: hovered ? 1 : 0 }}
+        transition={{ duration: 0.35, ease: expo }}
+        style={{ backgroundColor: s.accent }}
+      />
+      <motion.div
+        className="font-display font-light mb-2"
+        animate={{
+          color: hovered ? s.accent : '#CDD6E4',
+          scale: hovered ? 1.06 : 1,
+          x: hovered ? 4 : 0,
+        }}
+        transition={{ duration: 0.3, ease: expo }}
+        style={{ fontSize: 'clamp(44px, 5vw, 64px)', transformOrigin: 'left center' }}
+      >
+        {s.special
+          ? <span>{s.special}</span>
+          : <span ref={nodeRef}>{s.prefix}0{s.suffix}</span>}
+      </motion.div>
+      <motion.div
+        className="font-sans text-sm tracking-wide"
+        animate={{ opacity: hovered ? 0.7 : 0.35, x: hovered ? 4 : 0 }}
+        transition={{ duration: 0.3, ease: expo }}
+        style={{ color: '#EEE9E0' }}
+      >
+        {s.label}
+      </motion.div>
+    </motion.div>
+  )
+}
+
+function Stats() {
+  return (
+    <section className="py-28 bg-night-lift border-y border-platinum/8">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-16">
+          {STATS_DATA.map((s, i) => <StatItem key={i} s={s} i={i} />)}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── ShowcaseFeatureRow & SpecPill ────────────────────────────────
+function ShowcaseFeatureRow({ Icon, text, i }) {
+  const [h, setH] = useState(false)
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -16 }}
+      whileInView={{ opacity: 1, x: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.55, delay: i * 0.09, ease: expo }}
+      onHoverStart={() => setH(true)}
+      onHoverEnd={() => setH(false)}
+      whileHover={{ x: 6 }}
+      className="flex items-center gap-3.5 cursor-default rounded-xl px-3 py-2"
+      style={{ background: h ? 'rgba(184,194,208,0.05)' : 'transparent', transition: 'background 0.2s' }}
+    >
+      <motion.div
+        className="rounded-full flex items-center justify-center flex-shrink-0"
+        animate={{
+          width: h ? 36 : 32, height: h ? 36 : 32,
+          background: h ? 'rgba(184,194,208,0.15)' : 'rgba(184,194,208,0.08)',
+          boxShadow: h ? '0 0 16px -4px rgba(184,194,208,0.4)' : 'none',
+        }}
+        transition={{ duration: 0.25, ease: expo }}
+        style={{ border: '1px solid rgba(184,194,208,0.12)' }}
+      >
+        <motion.div animate={{ scale: h ? 1.35 : 1, rotate: h ? -10 : 0 }} transition={{ duration: 0.28, ease: expo }}>
+          <Icon size={h ? 16 : 14} style={{ color: 'rgba(184,194,208,1)' }} />
+        </motion.div>
+      </motion.div>
+      <motion.span
+        className="text-sm font-sans"
+        animate={{ color: h ? 'rgba(238,233,224,0.82)' : 'rgba(238,233,224,0.52)' }}
+        transition={{ duration: 0.2 }}
+      >
+        {text}
+      </motion.span>
+    </motion.div>
+  )
+}
+
+function SpecPill({ spec, i }) {
+  const [ph, setPh] = useState(false)
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      whileInView={{ opacity: 1, x: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.5, delay: 1.0 + i * 0.12, ease: expo }}
+      onHoverStart={() => setPh(true)}
+      onHoverEnd={() => setPh(false)}
+      whileHover={{ x: -4, scale: 1.06 }}
+      style={{
+        background: ph ? 'rgba(22,18,42,0.98)' : 'rgba(14,12,28,0.9)',
+        border: `1px solid ${ph ? 'rgba(184,194,208,0.28)' : 'rgba(184,194,208,0.12)'}`,
+        borderRadius: 10, padding: '8px 14px',
+        backdropFilter: 'blur(10px)',
+        boxShadow: ph ? '0 12px 32px -4px rgba(0,0,0,0.6), 0 0 20px -8px rgba(184,194,208,0.2)' : '0 8px 24px -4px rgba(0,0,0,0.5)',
+        transition: 'background 0.25s, border-color 0.25s, box-shadow 0.25s',
+        cursor: 'default',
+      }}
+    >
+      <div style={{ fontSize: 8, color: ph ? 'rgba(184,194,208,0.55)' : 'rgba(184,194,208,0.35)', letterSpacing: '0.25em', textTransform: 'uppercase', fontFamily: 'sans-serif', marginBottom: 2, transition: 'color 0.2s' }}>
+        {spec.label}
+      </div>
+      <motion.div
+        animate={{ color: ph ? 'rgba(238,233,224,1)' : 'rgba(220,230,245,0.85)' }}
+        transition={{ duration: 0.2 }}
+        style={{ fontSize: 14, fontFamily: 'serif', fontWeight: 300 }}
+      >
+        {spec.value}
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ─── Card Showcase — Momento protagonista con flip interactivo ──────
 function CardShowcase() {
   const sectionRef = useRef(null)
-  const { scrollYProgress } = useScroll({ target: sectionRef, offset: ['start end', 'center center'] })
+  const { scrollYProgress } = useScroll({ target: sectionRef, offset: ['start end', 'center 55%'] })
   const reduced = useSafeReducedMotion()
 
-  // Card "presents itself": enters angled, straightens as you scroll into view
-  const cardRotateX = useTransform(scrollYProgress, [0, 1], reduced ? [0, 0] : [18, 0])
-  const cardRotateY = useTransform(scrollYProgress, [0, 1], reduced ? [0, 0] : [-22, 0])
-  const cardScale   = useTransform(scrollYProgress, [0, 1], reduced ? [1, 1] : [0.88, 1])
-  const cardOpacity = useTransform(scrollYProgress, [0, 0.3], [0, 1])
+  const cardRotateX = useTransform(scrollYProgress, [0, 1], reduced ? [0, 0] : [20, 0])
+  const cardRotateY = useTransform(scrollYProgress, [0, 1], reduced ? [0, 0] : [-28, 0])
+  const cardScale   = useTransform(scrollYProgress, [0, 1], reduced ? [1, 1] : [0.84, 1])
+  const cardOpacity = useTransform(scrollYProgress, [0, 0.25], [0, 1])
 
   const headingRef = useRef(null)
   const headingInView = useInView(headingRef, { once: true, margin: '-50px' })
 
   return (
-    <section ref={sectionRef} className="py-32 bg-night-mid overflow-hidden">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="grid lg:grid-cols-2 gap-20 items-center">
+    <section ref={sectionRef} className="relative py-36 overflow-hidden" style={{ background: 'linear-gradient(180deg, #08061A 0%, #0A0820 40%, #080616 100%)' }}>
+
+      {/* Fondo con glow masivo centrado */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="w-[900px] h-[600px] rounded-full blur-[180px]" style={{ background: 'radial-gradient(ellipse, rgba(184,194,208,0.055) 0%, rgba(130,160,210,0.025) 50%, transparent 70%)' }} />
+      </div>
+      {/* Líneas decorativas de lujo */}
+      <div className="absolute inset-0 opacity-[0.02]" style={{
+        backgroundImage: 'repeating-linear-gradient(90deg, rgba(184,194,208,1) 0px, rgba(184,194,208,1) 1px, transparent 1px, transparent 120px)',
+      }} />
+
+      <div className="relative max-w-7xl mx-auto px-6">
+        <div className="grid lg:grid-cols-[1fr_1.1fr] gap-16 items-center">
+          {/* Texto */}
           <div ref={headingRef}>
             <EyebrowReveal>La tarjeta</EyebrowReveal>
             <h2
-              className="font-display font-light text-sand leading-[0.95] mb-6"
-              style={{ fontSize: 'clamp(38px, 5vw, 58px)' }}
+              className="font-display font-light text-sand leading-[0.93] mb-7"
+              style={{ fontSize: 'clamp(40px, 5.2vw, 62px)' }}
             >
               {['La tarjeta en sí', 'es una declaración.'].map((line, i) => (
                 <MaskedLine key={i} delay={i * 0.13} inView={headingInView} className={i === 1 ? 'text-platinum' : ''}>
@@ -731,42 +1096,45 @@ function CardShowcase() {
               transition={{ duration: 0.7, delay: 0.25, ease: expo }}
               className="text-[15px] text-sand/45 font-sans leading-relaxed mb-10 max-w-md"
             >
-              Verde bosque mate. Detalles grabados con láser. Fabricada con un 85% de materiales reciclados.
-              Diseñada para sentirse tan bien en la mano como funciona en tu cartera.
+              Metal grabado con láser. Acabado platino mate. Fabricada con 85% de materiales reciclados.
+              Diseñada para sentirse tan bien en la mano como funciona en cualquier país del mundo.
             </motion.p>
-            <div className="space-y-5">
+
+            {/* Features list — cada fila es interactiva */}
+            <div className="space-y-3 mb-10">
               {[
-                { Icon: RiShieldCheckFill, text: 'Chip EMV + sin contacto + tarjeta virtual incluida' },
+                { Icon: RiShieldCheckFill, text: 'Chip EMV + sin contacto + tarjeta virtual' },
                 { Icon: RiLock2Line, text: 'Congela y descongela al instante desde la app' },
                 { Icon: RiSmartphoneLine, text: 'Apple Pay y Google Pay desde el primer día' },
                 { Icon: RiPlantLine, text: '85% materiales reciclados, envío carbono neutral' },
               ].map(({ Icon, text }, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, x: -14 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5, delay: i * 0.08, ease: expo }}
-                  className="flex items-center gap-3.5"
-                >
-                  <div className="w-8 h-8 bg-platinum/10 rounded-full flex items-center justify-center flex-shrink-0">
-                    <Icon size={14} className="text-platinum" />
-                  </div>
-                  <span className="text-sm text-sand/50 font-sans">{text}</span>
-                </motion.div>
+                <ShowcaseFeatureRow key={i} Icon={Icon} text={text} i={i} />
               ))}
             </div>
+
+            {/* Pill de disponibilidad */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.5, ease: expo }}
+              className="inline-flex items-center gap-2.5 text-[11px] font-sans font-semibold tracking-[0.2em] uppercase"
+              style={{ color: 'rgba(184,194,208,0.45)' }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Disponible para envío en 72h
+            </motion.div>
           </div>
 
-          {/* Scroll-driven card presentation */}
-          <div className="flex justify-center lg:justify-end relative">
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <motion.div
-                className="w-72 h-72 rounded-full blur-[90px]"
-                style={{ background: 'rgba(184,194,208,0.06)' }}
-              />
-            </div>
-            <div style={{ perspective: '1200px' }}>
+          {/* Tarjeta — grande, centrada, flip interactivo */}
+          <div className="flex flex-col items-center justify-center relative">
+            {/* Glow detrás de la tarjeta */}
+            <div className="absolute w-[500px] h-[400px] rounded-full blur-[100px] pointer-events-none"
+              style={{ background: 'radial-gradient(ellipse, rgba(184,194,208,0.09) 0%, transparent 65%)' }} />
+            <div className="absolute w-[300px] h-[250px] rounded-full blur-[50px] pointer-events-none"
+              style={{ background: 'radial-gradient(ellipse, rgba(150,180,230,0.06) 0%, transparent 65%)' }} />
+
+            <div style={{ perspective: '1400px' }}>
               <motion.div
                 style={{
                   rotateX: cardRotateX,
@@ -776,11 +1144,43 @@ function CardShowcase() {
                 }}
               >
                 <motion.div
-                  animate={reduced ? {} : { y: [0, -8, 0], rotate: [-0.8, 0.8, -0.8] }}
-                  transition={{ duration: 5, ease: 'easeInOut', repeat: Infinity }}
+                  animate={reduced ? {} : { y: [0, -10, 0], rotate: [-0.5, 0.5, -0.5] }}
+                  transition={{ duration: 5.5, ease: 'easeInOut', repeat: Infinity }}
                 >
-                  <CreditCard scale={1.15} assemblyDelay={0.4} />
+                  <CreditCard scale={1.3} assemblyDelay={0.35} interactive={true} />
                 </motion.div>
+              </motion.div>
+            </div>
+
+            {/* Hint + Specs en fila debajo de la tarjeta */}
+            <div className="mt-7 flex flex-col items-center gap-4 w-full">
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.7, delay: 1.2, ease: expo }}
+                className="flex items-center gap-2"
+                style={{ color: 'rgba(184,194,208,0.32)', fontSize: 11, fontFamily: 'sans-serif', letterSpacing: '0.18em', textTransform: 'uppercase' }}
+              >
+                <motion.span animate={{ rotate: [0, 15, -15, 0] }} transition={{ duration: 2.5, repeat: Infinity, delay: 2 }}>↺</motion.span>
+                Haz clic para girar
+              </motion.div>
+
+              {/* Specs en fila horizontal */}
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.7, delay: 1.0, ease: expo }}
+                className="flex gap-3"
+              >
+                {[
+                  { label: 'Material', value: 'Metal' },
+                  { label: 'Límite', value: 'Sin tope' },
+                  { label: 'Cashback', value: '5%' },
+                ].map((spec, i) => (
+                  <SpecPill key={i} spec={spec} i={i} />
+                ))}
               </motion.div>
             </div>
           </div>
@@ -796,6 +1196,122 @@ const PLANS = [
   { name: 'Black', price: '$15', period: '/mes', tagline: 'Para el financieramente intencional. Sin compromisos.', features: ['3% cashback en todo','Transferencias prioritarias al instante','Análisis avanzado de gastos','Concierge 24/7','Acceso a sala VIP (4×/año)','Sin cargos por divisas'], cta: 'Solicitar Black', highlight: true },
   { name: 'Elite', price: '$29', period: '/mes', tagline: 'Cuando el dinero es una herramienta, no una preocupación.', features: ['5% cashback ilimitado','Gestor de cuenta dedicado','Acceso ilimitado a salas VIP','Upgrades en hoteles y vuelos','Línea directa concierge 24/7','Tarjeta de metal grabada'], cta: 'Solicitar Elite', highlight: false },
 ]
+
+function PricingCard({ plan, i }) {
+  const [hovered, setHovered] = useState(false)
+  const [featHover, setFeatHover] = useState(null)
+
+  return (
+    <motion.div
+      key={i}
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-40px' }}
+      transition={{ duration: 0.75, delay: i * 0.1, ease: expo }}
+      whileHover={{ y: -12 }}
+      onHoverStart={() => setHovered(true)}
+      onHoverEnd={() => setHovered(false)}
+      className="relative rounded-3xl p-8 h-full flex flex-col border"
+      style={plan.highlight ? {
+        borderColor: hovered ? 'rgba(184,194,208,0.45)' : 'rgba(184,194,208,0.3)',
+        background: 'linear-gradient(145deg, #1A1530, #120F22)',
+        boxShadow: hovered
+          ? '0 0 80px -10px rgba(184,194,208,0.18), inset 0 1px 0 rgba(184,194,208,0.12)'
+          : '0 0 60px -10px rgba(184,194,208,0.1), inset 0 1px 0 rgba(184,194,208,0.08)',
+        transition: 'box-shadow 0.4s, border-color 0.3s',
+      } : {
+        borderColor: hovered ? 'rgba(238,233,224,0.12)' : 'rgba(238,233,224,0.06)',
+        background: 'linear-gradient(145deg, #120F22, #0E0C18)',
+        transition: 'border-color 0.3s',
+      }}
+    >
+      {/* Shimmer sweep al hover en el plan highlight */}
+      {plan.highlight && (
+        <motion.div
+          className="absolute inset-0 pointer-events-none"
+          animate={{ x: hovered ? ['-120%', '220%'] : '-120%' }}
+          transition={{ duration: 0.9, ease: cinematic }}
+          style={{
+            background: 'linear-gradient(105deg, transparent 30%, rgba(184,194,208,0.07) 50%, transparent 70%)',
+            transform: 'skewX(-15deg)',
+          }}
+        />
+      )}
+
+      {plan.highlight && (
+        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
+          <motion.div
+            animate={{ scale: hovered ? 1.05 : 1 }}
+            transition={{ duration: 0.3 }}
+            className="bg-platinum text-night text-[11px] font-sans font-bold px-4 py-1.5 rounded-full tracking-wide"
+          >
+            Más popular
+          </motion.div>
+        </div>
+      )}
+
+      <div className="mb-7">
+        <div className={`text-[11px] font-sans font-semibold tracking-[0.25em] uppercase mb-3 ${plan.highlight ? 'text-platinum/60' : 'text-sand/28'}`}>{plan.name}</div>
+        <motion.div
+          className="flex items-baseline gap-1 mb-3"
+          animate={{ x: hovered ? 3 : 0 }}
+          transition={{ duration: 0.3, ease: expo }}
+        >
+          <span className={`font-display font-light ${plan.highlight ? 'text-platinum-light' : 'text-sand'}`} style={{ fontSize: 'clamp(40px, 4vw, 52px)' }}>{plan.price}</span>
+          {plan.period && <span className="text-sm font-sans text-sand/30">{plan.period}</span>}
+        </motion.div>
+        <p className="text-sm font-sans leading-relaxed text-sand/38">{plan.tagline}</p>
+      </div>
+
+      <div className="space-y-2.5 flex-1 mb-8">
+        {plan.features.map((feat, j) => (
+          <motion.div
+            key={j}
+            className="flex items-start gap-3 rounded-lg px-2 py-1.5 cursor-default"
+            onHoverStart={() => setFeatHover(j)}
+            onHoverEnd={() => setFeatHover(null)}
+            animate={{
+              backgroundColor: featHover === j ? 'rgba(184,194,208,0.05)' : 'rgba(0,0,0,0)',
+              x: featHover === j ? 4 : 0,
+            }}
+            transition={{ duration: 0.2 }}
+          >
+            <motion.div
+              animate={{
+                scale: featHover === j ? 1.4 : 1,
+                rotate: featHover === j ? 10 : 0,
+              }}
+              transition={{ duration: 0.25, ease: expo }}
+              className="flex-shrink-0 mt-0.5"
+            >
+              <RiCheckLine size={15} style={{ color: plan.highlight ? 'rgba(184,194,208,1)' : featHover === j ? 'rgba(184,194,208,0.7)' : 'rgba(238,233,224,0.35)' }} />
+            </motion.div>
+            <motion.span
+              className="text-sm font-sans leading-snug"
+              animate={{ color: featHover === j ? 'rgba(238,233,224,0.8)' : 'rgba(238,233,224,0.5)' }}
+              transition={{ duration: 0.2 }}
+            >
+              {feat}
+            </motion.span>
+          </motion.div>
+        ))}
+      </div>
+
+      <motion.a
+        href="#"
+        whileHover={{ scale: 1.03, boxShadow: plan.highlight ? '0 0 28px -4px rgba(184,194,208,0.3)' : 'none' }}
+        whileTap={{ scale: 0.96 }}
+        className={`block text-center text-sm font-sans font-semibold py-3.5 rounded-full transition-colors ${
+          plan.highlight
+            ? 'bg-platinum text-night hover:bg-platinum-light'
+            : 'border border-sand/12 text-sand/50 hover:border-platinum/30 hover:text-platinum'
+        }`}
+      >
+        {plan.cta}
+      </motion.a>
+    </motion.div>
+  )
+}
 
 function Pricing() {
   const headingRef = useRef(null)
@@ -816,61 +1332,81 @@ function Pricing() {
         </div>
 
         <div className="grid md:grid-cols-3 gap-5">
-          {PLANS.map((plan, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-40px' }}
-              transition={{ duration: 0.75, delay: i * 0.1, ease: expo }}
-              whileHover={{ y: -10 }}
-              className="relative rounded-3xl p-8 h-full flex flex-col border transition-all duration-300"
-              style={plan.highlight ? {
-                borderColor: 'rgba(184,194,208,0.3)',
-                background: 'linear-gradient(145deg, #1A1530, #120F22)',
-                boxShadow: '0 0 60px -10px rgba(184,194,208,0.1), inset 0 1px 0 rgba(184,194,208,0.08)',
-              } : {
-                borderColor: 'rgba(238,233,224,0.06)',
-                background: 'linear-gradient(145deg, #120F22, #0E0C18)',
-              }}
-            >
-              {plan.highlight && (
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                  <div className="bg-platinum text-night text-[11px] font-sans font-bold px-4 py-1.5 rounded-full tracking-wide">Más popular</div>
-                </div>
-              )}
-              <div className="mb-7">
-                <div className={`text-[11px] font-sans font-semibold tracking-[0.25em] uppercase mb-3 ${plan.highlight ? 'text-platinum/60' : 'text-sand/28'}`}>{plan.name}</div>
-                <div className="flex items-baseline gap-1 mb-3">
-                  <span className={`font-display font-light ${plan.highlight ? 'text-platinum-light' : 'text-sand'}`} style={{ fontSize: 'clamp(40px, 4vw, 52px)' }}>{plan.price}</span>
-                  {plan.period && <span className="text-sm font-sans text-sand/30">{plan.period}</span>}
-                </div>
-                <p className="text-sm font-sans leading-relaxed text-sand/38">{plan.tagline}</p>
-              </div>
-              <div className="space-y-3 flex-1 mb-8">
-                {plan.features.map((feat, j) => (
-                  <div key={j} className="flex items-start gap-3">
-                    <RiCheckLine size={15} className={`flex-shrink-0 mt-0.5 ${plan.highlight ? 'text-platinum' : 'text-sand/35'}`} />
-                    <span className="text-sm font-sans leading-snug text-sand/50">{feat}</span>
-                  </div>
-                ))}
-              </div>
-              <motion.a
-                href="#"
-                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
-                className={`block text-center text-sm font-sans font-semibold py-3.5 rounded-full transition-all ${
-                  plan.highlight
-                    ? 'bg-platinum text-night hover:bg-platinum-light'
-                    : 'border border-sand/12 text-sand/50 hover:border-platinum/30 hover:text-platinum'
-                }`}
-              >
-                {plan.cta}
-              </motion.a>
-            </motion.div>
-          ))}
+          {PLANS.map((plan, i) => <PricingCard key={i} plan={plan} i={i} />)}
         </div>
       </div>
     </section>
+  )
+}
+
+// ─── Testimonial Card ─────────────────────────────────────────────
+function TestimonialCard({ t, i }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 28 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-40px' }}
+      transition={{ duration: 0.8, delay: i * 0.13, ease: expo }}
+      whileHover={{ y: -8 }}
+      onHoverStart={() => setHovered(true)}
+      onHoverEnd={() => setHovered(false)}
+      className="flex flex-col h-full border rounded-2xl p-7 cursor-default overflow-hidden relative"
+      style={{
+        background: 'linear-gradient(145deg, rgba(22,18,42,0.8), rgba(14,12,28,0.95))',
+        borderColor: hovered ? 'rgba(184,194,208,0.2)' : 'rgba(238,233,224,0.06)',
+        transition: 'border-color 0.3s',
+      }}
+    >
+      <motion.div
+        className="absolute inset-0 pointer-events-none"
+        animate={{ opacity: hovered ? 1 : 0 }}
+        transition={{ duration: 0.4 }}
+        style={{ background: `radial-gradient(ellipse 60% 40% at 50% 0%, ${t.color}22 0%, transparent 65%)` }}
+      />
+      <div className="flex gap-1 mb-6">
+        {[...Array(5)].map((_, j) => (
+          <motion.div
+            key={j}
+            animate={{ scale: hovered ? [1, 1.5, 1] : 1, rotate: hovered ? [0, 15, 0] : 0 }}
+            transition={{ duration: 0.4, delay: hovered ? j * 0.07 : 0, ease: expo }}
+          >
+            <RiStarFill size={13} style={{ color: hovered ? 'rgba(184,194,208,0.95)' : 'rgba(184,194,208,0.65)' }} />
+          </motion.div>
+        ))}
+      </div>
+      <motion.blockquote
+        className="font-display font-light leading-snug mb-8 flex-1"
+        animate={{ color: hovered ? 'rgba(238,233,224,0.92)' : 'rgba(238,233,224,0.75)' }}
+        transition={{ duration: 0.3 }}
+        style={{ fontSize: 'clamp(17px, 1.7vw, 21px)' }}
+      >
+        "{t.quote}"
+      </motion.blockquote>
+      <div className="flex items-center gap-3.5 pt-6 border-t border-sand/8">
+        <motion.div
+          className="rounded-full flex items-center justify-center text-white text-sm font-sans font-bold flex-shrink-0"
+          animate={{
+            width: hovered ? 44 : 40, height: hovered ? 44 : 40,
+            boxShadow: hovered ? `0 0 20px -4px ${t.color}` : 'none',
+          }}
+          transition={{ duration: 0.3, ease: expo }}
+          style={{ backgroundColor: t.color }}
+        >
+          {t.initial}
+        </motion.div>
+        <div>
+          <motion.div
+            className="font-sans font-medium leading-none mb-1"
+            animate={{ color: hovered ? 'rgba(238,233,224,1)' : 'rgba(238,233,224,0.85)' }}
+            style={{ fontSize: 14 }}
+          >
+            {t.name}
+          </motion.div>
+          <div className="text-xs font-sans text-sand/30">{t.title}</div>
+        </div>
+      </div>
+    </motion.div>
   )
 }
 
@@ -901,32 +1437,7 @@ function Testimonials() {
 
         <div className="grid md:grid-cols-3 gap-6">
           {TESTIMONIALS.map((t, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 28 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-40px' }}
-              transition={{ duration: 0.8, delay: i * 0.13, ease: expo }}
-              whileHover={{ y: -5, borderColor: 'rgba(184,194,208,0.18)' }}
-              className="flex flex-col h-full border border-sand/6 rounded-2xl p-7 transition-all cursor-default"
-              style={{ background: 'linear-gradient(145deg, rgba(22,18,42,0.8), rgba(14,12,28,0.95))' }}
-            >
-              <div className="flex gap-0.5 mb-6">
-                {[...Array(5)].map((_, j) => <RiStarFill key={j} size={13} className="text-platinum/65" />)}
-              </div>
-              <blockquote className="font-display font-light text-sand/75 leading-snug mb-8 flex-1" style={{ fontSize: 'clamp(17px, 1.7vw, 21px)' }}>
-                "{t.quote}"
-              </blockquote>
-              <div className="flex items-center gap-3.5 pt-6 border-t border-sand/8">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-sans font-bold flex-shrink-0" style={{ backgroundColor: t.color }}>
-                  {t.initial}
-                </div>
-                <div>
-                  <div className="text-sm font-sans font-medium text-sand leading-none mb-1">{t.name}</div>
-                  <div className="text-xs font-sans text-sand/30">{t.title}</div>
-                </div>
-              </div>
-            </motion.div>
+            <TestimonialCard key={i} t={t} i={i} />
           ))}
         </div>
       </div>
@@ -945,6 +1456,7 @@ const FAQS = [
 
 function FAQ() {
   const [open, setOpen] = useState(null)
+  const [hoveredItem, setHoveredItem] = useState(null)
 
   return (
     <section className="py-28 bg-night-mid border-t border-platinum/8">
@@ -957,22 +1469,72 @@ function FAQ() {
         <div>
           {FAQS.map((faq, i) => (
             <Reveal key={i} delay={i * 0.05}>
-              <div className="border-t border-sand/7 last:border-b last:border-sand/7">
-                <button onClick={() => setOpen(open === i ? null : i)} className="w-full flex items-center justify-between py-6 text-left group">
-                  <span className="font-sans font-medium text-sand/65 text-[15px] pr-8 group-hover:text-platinum transition-colors duration-200">{faq.q}</span>
-                  <motion.span animate={{ rotate: open === i ? 45 : 0 }} transition={{ duration: 0.25, ease: expo }} className="text-platinum/50 flex-shrink-0 text-2xl leading-none">+</motion.span>
+              <motion.div
+                className="border-t border-sand/7 last:border-b last:border-sand/7 relative"
+                onHoverStart={() => setHoveredItem(i)}
+                onHoverEnd={() => setHoveredItem(null)}
+              >
+                {/* Barra izquierda al hover/open */}
+                <motion.div
+                  className="absolute left-0 top-0 bottom-0 w-px"
+                  animate={{
+                    opacity: open === i ? 1 : hoveredItem === i ? 0.4 : 0,
+                    scaleY: open === i || hoveredItem === i ? 1 : 0,
+                  }}
+                  transition={{ duration: 0.3, ease: expo }}
+                  style={{
+                    background: 'linear-gradient(180deg, transparent, rgba(184,194,208,0.8), transparent)',
+                    transformOrigin: 'center',
+                  }}
+                />
+                <button
+                  onClick={() => setOpen(open === i ? null : i)}
+                  className="w-full flex items-center justify-between py-6 text-left pl-4"
+                >
+                  <motion.span
+                    className="font-sans font-medium text-[15px] pr-8"
+                    animate={{
+                      color: open === i
+                        ? 'rgba(184,194,208,1)'
+                        : hoveredItem === i
+                          ? 'rgba(238,233,224,0.85)'
+                          : 'rgba(238,233,224,0.65)',
+                      x: open === i ? 4 : 0,
+                    }}
+                    transition={{ duration: 0.25, ease: expo }}
+                  >
+                    {faq.q}
+                  </motion.span>
+                  <motion.div
+                    animate={{
+                      rotate: open === i ? 45 : 0,
+                      scale: open === i ? 1.15 : hoveredItem === i ? 1.08 : 1,
+                    }}
+                    transition={{ duration: 0.28, ease: expo }}
+                    className="flex-shrink-0 text-2xl leading-none font-light"
+                    style={{ color: open === i ? 'rgba(184,194,208,1)' : 'rgba(184,194,208,0.5)' }}
+                  >
+                    +
+                  </motion.div>
                 </button>
                 <motion.div
                   initial={false}
                   animate={{ gridTemplateRows: open === i ? '1fr' : '0fr', opacity: open === i ? 1 : 0 }}
-                  transition={{ duration: 0.35, ease: expo }}
+                  transition={{ duration: 0.38, ease: expo }}
                   style={{ display: 'grid' }}
                 >
                   <div className="overflow-hidden">
-                    <p className="text-sm text-sand/42 font-sans leading-relaxed pb-6 pr-12">{faq.a}</p>
+                    <motion.p
+                      className="text-sm font-sans leading-relaxed pb-6 pr-12 pl-4"
+                      animate={{ y: open === i ? 0 : 8 }}
+                      transition={{ duration: 0.35, ease: expo }}
+                      style={{ color: 'rgba(238,233,224,0.42)' }}
+                    >
+                      {faq.a}
+                    </motion.p>
                   </div>
                 </motion.div>
-              </div>
+              </motion.div>
             </Reveal>
           ))}
         </div>
@@ -1001,33 +1563,30 @@ function CTA() {
     <section className="py-32 bg-night relative overflow-hidden border-t border-platinum/8">
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[350px] rounded-full blur-[120px] pointer-events-none"
         style={{ background: 'radial-gradient(ellipse, rgba(184,194,208,0.055) 0%, transparent 70%)' }} />
-
       <div className="relative max-w-4xl mx-auto px-6 text-center">
         <div className="flex justify-center mb-10">
           <motion.div
-            animate={reduced ? {} : { y: [0, -6, 0], rotate: [-1.5, 1.5, -1.5] }}
-            transition={{ duration: 4, ease: 'easeInOut', repeat: Infinity }}
+            animate={reduced ? {} : { y: [0, -8, 0], rotate: [-0.8, 0.8, -0.8] }}
+            transition={{ duration: 4.5, ease: 'easeInOut', repeat: Infinity }}
           >
-            <CreditCard scale={0.85} assemblyDelay={0.2} />
+            <CreditCard scale={0.95} assemblyDelay={0.2} interactive={true} />
           </motion.div>
         </div>
-
         <div ref={headingRef}>
           <h2
             className="font-display font-light text-sand leading-[0.93] mb-5"
             style={{ fontSize: 'clamp(42px, 6vw, 80px)' }}
           >
-            {['¿Listo para repensar', 'tus finanzas?'].map((line, i) => (
+            {['Listo para repensar', 'tus finanzas?'].map((line, i) => (
               <MaskedLine key={i} delay={i * 0.15} inView={headingInView} className={i === 1 ? 'text-platinum' : ''}>
                 {line}
               </MaskedLine>
             ))}
           </h2>
         </div>
-
         <Reveal delay={0.3}>
           <p className="text-[16px] text-sand/42 font-sans mb-12 max-w-lg mx-auto leading-relaxed">
-            Únete a más de 50,000 personas que ya hicieron el cambio. Solicitar toma menos de 30 segundos.
+            Unete a mas de 50,000 personas que ya hicieron el cambio. Solicitar toma menos de 30 segundos.
           </p>
           <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 justify-center max-w-md mx-auto mb-10">
             <input
@@ -1036,10 +1595,12 @@ function CTA() {
               className="flex-1 bg-night-lift border border-sand/10 rounded-full px-6 py-3.5 text-sm font-sans text-sand placeholder:text-sand/22 outline-none focus:border-platinum/35 focus:ring-2 focus:ring-platinum/8 transition-all"
             />
             <motion.button
-              type="submit" whileHover={{ scale: 1.02, boxShadow: '0 0 28px -4px rgba(184,194,208,0.28)' }} whileTap={{ scale: 0.97 }}
+              type="submit"
+              whileHover={{ scale: 1.02, boxShadow: '0 0 28px -4px rgba(184,194,208,0.28)' }}
+              whileTap={{ scale: 0.97 }}
               className="bg-platinum text-night text-sm font-sans font-semibold px-8 py-3.5 rounded-full hover:bg-platinum-light transition-colors whitespace-nowrap"
             >
-              {sent ? '✓ Ya estás en la lista' : 'Acceso anticipado'}
+              {sent ? 'Ya estas en la lista' : 'Acceso anticipado'}
             </motion.button>
           </form>
           <div className="flex items-center justify-center gap-6">
@@ -1060,9 +1621,9 @@ function CTA() {
 // ─── Footer ───────────────────────────────────────────────────────
 function Footer() {
   const cols = {
-    Producto: ['Características','Precios','Seguridad','Hoja de ruta','Novedades'],
+    Producto: ['Caracteristicas','Precios','Seguridad','Hoja de ruta','Novedades'],
     Empresa:  ['Nosotros','Blog','Carreras','Prensa','Socios'],
-    Soporte:  ['Centro de ayuda','Contáctanos','Estado del servicio','Términos','Privacidad'],
+    Soporte:  ['Centro de ayuda','Contactanos','Estado del servicio','Terminos','Privacidad'],
   }
   return (
     <footer className="text-sand py-20 border-t border-platinum/8" style={{ backgroundColor: '#040608' }}>
@@ -1073,7 +1634,7 @@ function Footer() {
               Fin<span className="text-platinum">tech</span>
             </div>
             <p className="text-sm text-sand/28 font-sans leading-relaxed max-w-[200px]">
-              La tarjeta construida para el futuro. Solicítala en 30 segundos.
+              La tarjeta construida para el futuro. Solicitala en 30 segundos.
             </p>
           </div>
           {Object.entries(cols).map(([cat, items]) => (
@@ -1090,8 +1651,8 @@ function Footer() {
           ))}
         </div>
         <div className="pt-8 border-t border-platinum/8 flex flex-col md:flex-row justify-between gap-3">
-          <div className="text-xs text-sand/18 font-sans">© 2026 Fintech Inc. Asegurado por FDIC. Todos los derechos reservados.</div>
-          <div className="text-xs text-sand/18 font-sans">Hecho con intención.</div>
+          <div className="text-xs text-sand/18 font-sans">2026 Fintech Inc. Asegurado por FDIC. Todos los derechos reservados.</div>
+          <div className="text-xs text-sand/18 font-sans">Hecho con intencion.</div>
         </div>
       </div>
     </footer>
